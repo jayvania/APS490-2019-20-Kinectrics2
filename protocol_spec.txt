@@ -1,0 +1,70 @@
+protocol specification:
+- request-response model with the client initiating the request
+- all communication is done using JSON
+- all strings sent over the bluetooth layer end in \n (newline character)
+
+client -> server
+	- the client sends a JSON object that specifies the request and any parameters for the request
+	- there are three possible requests:
+		- DUMP
+			- This causes the server to send all the data that it has
+		- QUERY
+			- This causes the server to execute a query, returning all data more recent than the date provided
+			- The date is provided in three more fields (year, month, day) in the JSON
+		- END
+			- This causes the server to disconnect
+	
+	Examples of client requests in JSON:
+
+	//this causes the server to send all data that it has 
+	{ 
+		"request": "DUMP"
+	}
+
+	//this causes the server to send all data from October 21st, 2019 and onwards
+	{ 
+		"request": "QUERY",
+		"year": 2019,
+		"month": 10,
+		"day": 21,
+	}
+
+	//this causes the server to close the connection
+	{ 
+		"request": "END"
+	}
+
+server -> client
+	- the server sends a JSON object that specifies a response status and any data accompanying the response
+	- there are three possible responses:
+		- ERROR
+			- The request the client sent is malformed or otherwise not understood
+			- The server will supply the reason for the error, if possible
+		- DATA
+			- This indicates the server has executed a query and data accompanies the response
+		- EXIT
+			- Acknowledgement of ending the connection (response to an END request)
+	
+	Examples of server responses in JSON:
+	
+	//this indicates the server did not understand the client's request
+	{
+		"response": "ERROR",
+		"error": "CRASHANDBURN is not a valid request"
+	}
+	
+	//this is a response to a DUMP or QUERY request, with data sent in an array
+	{
+		"response": "DATA",
+		"data" : [ 
+			([2019, 11, 30, 17, 38], 3.7), 
+			([2019, 12, 01, 17, 37], 4.2), 
+			([2019, 12, 02, 17, 36], 1.6), 			
+			]
+	}
+	
+	//this indicates the server has received the END request and is closing the connection
+	{
+		"response": "EXIT"
+	}
+	

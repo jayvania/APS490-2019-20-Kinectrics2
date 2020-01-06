@@ -4,22 +4,23 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.app.DatePickerDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.DatePicker;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.Set;
-
-
-
 
 public class MainActivity extends AppCompatActivity {
 
@@ -38,14 +39,22 @@ public class MainActivity extends AppCompatActivity {
     // Local Bluetooth adapter
     private BluetoothAdapter mBluetoothAdapter = null;
 
-    // Member object for the chat services
+    // Member object for the Bluetooth service
     private RPiBluetoothService mBluetoothService = null;
 
-    LinearLayout myLayout;
-    Button button;
+    //UI elements
+    LinearLayout myLayout = null;
+    TextView statusDisplay = null;
+    Button connectButton = null; //button used to initiate the connection
+    Button dumpButton = null;
+    Button queryButton = null;
+    DatePickerDialog datePicker = null; //selecting a date for the query
+    Button endButton = null;
 
-    BluetoothDevice serverDevice = null; //stores the RPi server
-
+    /**
+     * Check if the device supports bluetooth, quit if not
+     * @param savedInstanceState
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -53,6 +62,9 @@ public class MainActivity extends AppCompatActivity {
 
         myLayout = findViewById(R.id.my_layout);
 
+        statusDisplay = new TextView(this);
+        statusDisplay.setText("Initializing");
+        myLayout.addView(statusDisplay);
 
         mBluetoothAdapter = BluetoothAdapter.getDefaultAdapter();
         if (mBluetoothAdapter == null) {
@@ -62,6 +74,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Check if Bluetooth is enabled, ask the user to turn on if not
+     */
     @Override
     public void onStart() {
         super.onStart();
@@ -77,6 +92,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Restart Bluetooth service if previously quit
+     */
     @Override
     public synchronized void onResume() {
         super.onResume();
@@ -87,58 +105,107 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Set up the application - initializes the Bluetooth service and draws a decent UI
+     */
     private void setup() {
-        //TODO: Set up initial UI
+        initializeUI();
 
         // Initialize the BluetoothChatService to perform bluetooth connections
         mBluetoothService = new RPiBluetoothService(this, mHandler);
-        addToUI("Started; connecting");
-        connect(null);
-
+        updateStatus("Started");
     }
 
-    //a method for debugging purposes - prints a message to the UI
+    /**
+     * A method for debugging purposes - prints a message to the App UI
+     * @param content The message that will be printed to the screen
+     */
     private void addToUI(String content) {
         TextView display = new TextView(this);
         display.setText(content);
         myLayout.addView(display);
     }
 
+    /**
+     * Update the status message TextView at the top of the IU
+     */
+    private void updateStatus(String message) {
+        statusDisplay.setText(message);
+    }
+
+    /**
+     * Draws the initial user interface
+     */
+    private void initializeUI() {
+        connectButton = new Button(this);
+        connectButton.setText("Connect");
+        connectButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                connect(v);
+            }
+        });
+        myLayout.addView(connectButton);
+    }
+
+    /**
+     * Draw UI elements once the app has connected to the server
+     *
+     * Remove initialized UI elements
+     * Add elements to send commands to the server
+     */
+    private void connectedUI() {
+        if (connectButton != null) {
+            myLayout.removeView(connectButton);
+            connectButton = null;
+        }
+
+        //Dump button
+        dumpButton = new Button(this);
+        dumpButton.setText("Dump all data");
+        dumpButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                dumpDatabase();
+            }
+        });
+        myLayout.addView(dumpButton);
+
+        //Query button
+        queryButton = new Button(this);
+        queryButton.setText("Get data from X date");
+        final Context thisContext = this;
+        queryButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                datePicker = new DatePickerDialog(thisContext);
+                datePicker.setOnDateSetListener(new DatePickerDialog.OnDateSetListener() {
+                    public void onDateSet(DatePicker view, int year, int month, int day) {
+                        query(year, month+1 /* DatePicker month is 0 indexed */, day);
+                    }
+                });
+                datePicker.show();
+            }
+        });
+
+        myLayout.addView(queryButton);
+
+        //Disconnect button
+        endButton = new Button(this);
+        endButton.setText("Close connection");
+        endButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                end();
+            }
+        });
+        myLayout.addView(endButton);
+    }
+
+    /**
+     * Stop the Bluetooth service when the app loses focus
+     */
     @Override
     public void onDestroy() {
         super.onDestroy();
         // Stop the Bluetooth service
         if (mBluetoothService != null) mBluetoothService.stop();
-    }
-
-    /*
-        JSONObject req = new JSONObject();
-
-        try {
-            req.put("request", "DUMP");
-        }
-        catch (JSONException e) {
-            e.printStackTrace();
-        }
-
-        TextView reqDisplay = new TextView(this);
-        reqDisplay.setText(req.toString());
-        myLayout.addView(reqDisplay);
-    */
-
-    private void sendMessage(String message) {
-
-        // Check that we're actually connected before trying anything
-        if (mBluetoothService.getState() != mBluetoothService.STATE_CONNECTED) {
-            Toast.makeText(this, "No connected device", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        // Check that there's actually something to send
-        if (message.length() > 0) {
-            // Get the message bytes and tell the BluetoothChatService to write
-            byte[] send = message.getBytes();
-            mBluetoothService.write(send);
-        }
     }
 
     /**
@@ -155,6 +222,13 @@ public class MainActivity extends AppCompatActivity {
         mBluetoothService.query(year, month, day);
     }
 
+    /**
+     * Send a request to the server to gracefully close the connection
+     */
+    public void end() {
+        mBluetoothService.end();
+    }
+
     // The Handler that gets information back from the BluetoothChatService
     @SuppressLint("HandlerLeak")
     private final Handler mHandler = new Handler() {
@@ -164,17 +238,18 @@ public class MainActivity extends AppCompatActivity {
                 case MESSAGE_STATE_CHANGE:
                     switch(msg.arg1) {
                         case RPiBluetoothService.STATE_NONE:
-                            addToUI("STATE_NONE");
+                            updateStatus("Disconnected");
                             break;
                         case RPiBluetoothService.STATE_CONNECTING:
-                            addToUI("Connecting");
+                            updateStatus("Connecting");
                             break;
                         case RPiBluetoothService.STATE_CONNECTED:
-                            addToUI("Connected");
-                            query(2019, 12, 15);
+                            updateStatus("Connected");
+                            connectedUI();
+                            //query(2019, 12, 15);
                             break;
                         default:
-                            addToUI(Integer.toString(msg.arg1));
+                            updateStatus(Integer.toString(msg.arg1));
                     }
                     break;
                 case MESSAGE_WRITE:
@@ -202,6 +277,12 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    /**
+     * Handles when the user responds to the request to enable Bluetooth
+     * @param requestCode
+     * @param resultCode
+     * @param data
+     */
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
         switch (requestCode) {
             case REQUEST_ENABLE_BT:
@@ -217,6 +298,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Connect to the Raspberry Pi.
+     * Hardcoded in.
+     * @param v
+     */
     public void connect(View v) {
 
         BluetoothDevice serverDevice = null;
@@ -228,15 +314,13 @@ public class MainActivity extends AppCompatActivity {
             for (BluetoothDevice device : pairedDevices) {
                 String deviceName = device.getName();
                 String deviceMacAddress = device.getAddress();
-                String displayText = "Paired device: " + deviceName + " - " + deviceMacAddress;
+//                String displayText = "Paired device: " + deviceName + " - " + deviceMacAddress;
                 if (deviceName.equals("elderberry")) {
                     serverDevice = device;
-                    displayText += " (!)";
+//                    displayText += " (!)";
                 }
 
-                TextView deviceDisplay = new TextView(this);
-                deviceDisplay.setText(displayText);
-                myLayout.addView(deviceDisplay);
+//                addToUI(displayText);
             }
         }
 

@@ -50,6 +50,8 @@ public class MainActivity extends AppCompatActivity {
     Button queryButton = null;
     DatePickerDialog datePicker = null; //selecting a date for the query
     Button endButton = null;
+    TextView requestDisplay = null;
+    TextView responseDisplay = null;
 
     /**
      * Check if the device supports bluetooth, quit if not
@@ -134,17 +136,60 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
+     * Display the request sent to the server
+     */
+    private void displayRequest(String request) {
+        if (requestDisplay != null) {
+            myLayout.removeView(requestDisplay);
+            requestDisplay = null;
+        }
+        requestDisplay = new TextView(this);
+        requestDisplay.setText("Request: \n" + request);
+        myLayout.addView(requestDisplay);
+    }
+
+    /**
+     * Display the response from the server
+     */
+    private void displayResponse(String response) {
+        if (responseDisplay != null) {
+            myLayout.removeView(responseDisplay);
+            responseDisplay = null;
+        }
+        responseDisplay = new TextView(this);
+        responseDisplay.setText("Response: \n" + response);
+        myLayout.addView(responseDisplay);
+    }
+
+    /**
      * Draws the initial user interface
      */
     private void initializeUI() {
-        connectButton = new Button(this);
-        connectButton.setText("Connect");
-        connectButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                connect(v);
-            }
-        });
-        myLayout.addView(connectButton);
+        //remove buttons from previous connection
+        if (dumpButton != null) {
+            myLayout.removeView(dumpButton);
+            dumpButton = null;
+        }
+        if (queryButton != null) {
+            myLayout.removeView(queryButton);
+            queryButton = null;
+        }
+        if (endButton != null) {
+            myLayout.removeView(endButton);
+            endButton = null;
+        }
+
+
+        if (connectButton == null) {
+            connectButton = new Button(this);
+            connectButton.setText("Connect");
+            connectButton.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    connect(v);
+                }
+            });
+            myLayout.addView(connectButton);
+        }
     }
 
     /**
@@ -160,42 +205,47 @@ public class MainActivity extends AppCompatActivity {
         }
 
         //Dump button
-        dumpButton = new Button(this);
-        dumpButton.setText("Dump all data");
-        dumpButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                dumpDatabase();
-            }
-        });
-        myLayout.addView(dumpButton);
+        if (dumpButton == null) {
+            dumpButton = new Button(this);
+            dumpButton.setText("Dump all data");
+            dumpButton.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    dumpDatabase();
+                }
+            });
+            myLayout.addView(dumpButton);
+        }
 
         //Query button
-        queryButton = new Button(this);
-        queryButton.setText("Get data from X date");
-        final Context thisContext = this;
-        queryButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                datePicker = new DatePickerDialog(thisContext);
-                datePicker.setOnDateSetListener(new DatePickerDialog.OnDateSetListener() {
-                    public void onDateSet(DatePicker view, int year, int month, int day) {
-                        query(year, month+1 /* DatePicker month is 0 indexed */, day);
-                    }
-                });
-                datePicker.show();
-            }
-        });
-
-        myLayout.addView(queryButton);
+        if (queryButton == null) {
+            queryButton = new Button(this);
+            queryButton.setText("Get data from X date");
+            final Context thisContext = this;
+            queryButton.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    datePicker = new DatePickerDialog(thisContext);
+                    datePicker.setOnDateSetListener(new DatePickerDialog.OnDateSetListener() {
+                        public void onDateSet(DatePicker view, int year, int month, int day) {
+                            query(year, month + 1 /* DatePicker month is 0 indexed */, day);
+                        }
+                    });
+                    datePicker.show();
+                }
+            });
+            myLayout.addView(queryButton);
+        }
 
         //Disconnect button
-        endButton = new Button(this);
-        endButton.setText("Close connection");
-        endButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-                end();
-            }
-        });
-        myLayout.addView(endButton);
+        if (endButton == null) {
+            endButton = new Button(this);
+            endButton.setText("Close connection");
+            endButton.setOnClickListener(new View.OnClickListener() {
+                public void onClick(View v) {
+                    end();
+                }
+            });
+            myLayout.addView(endButton);
+        }
     }
 
     /**
@@ -239,6 +289,7 @@ public class MainActivity extends AppCompatActivity {
                     switch(msg.arg1) {
                         case RPiBluetoothService.STATE_NONE:
                             updateStatus("Disconnected");
+                            initializeUI();
                             break;
                         case RPiBluetoothService.STATE_CONNECTING:
                             updateStatus("Connecting");
@@ -246,7 +297,6 @@ public class MainActivity extends AppCompatActivity {
                         case RPiBluetoothService.STATE_CONNECTED:
                             updateStatus("Connected");
                             connectedUI();
-                            //query(2019, 12, 15);
                             break;
                         default:
                             updateStatus(Integer.toString(msg.arg1));
@@ -257,16 +307,14 @@ public class MainActivity extends AppCompatActivity {
                     // construct a string from the buffer
                     String writeMessage = new String(writeBuf);
 
-                    //TODO: handle a message write here
-                    addToUI("Sending message: \n" + writeMessage);
+                    displayRequest(writeMessage);
                     break;
                 case MESSAGE_READ:
                     byte[] readBuf = (byte[]) msg.obj;
                     // construct a string from the valid bytes in the buffer
                     String readMessage = new String(readBuf, 0, msg.arg1);
 
-                    //TODO: handle a message read here
-                    addToUI("Received message: \n" + readMessage);
+                    displayResponse(readMessage);
 
                     break;
                 case MESSAGE_TOAST:

@@ -323,6 +323,7 @@ public class RPiBluetoothService {
         }
 
         public void run() {
+            String message = "";
             byte[] buffer = new byte[1024];
             int bytes;
             // Keep listening to the InputStream while connected
@@ -330,9 +331,17 @@ public class RPiBluetoothService {
                 try {
                     // Read from the InputStream
                     bytes = mmInStream.read(buffer);
-                    // Send the obtained bytes to the UI Activity
-                    mHandler.obtainMessage(MainActivity.MESSAGE_READ, bytes, -1, buffer)
-                            .sendToTarget();
+                    String received = new String(buffer, 0, bytes);
+                    message += received;
+                    //end of message
+                    if (buffer[bytes - 1] == '\n') {
+                        // Send the obtained message to the UI activity
+                        mHandler.obtainMessage(MainActivity.MESSAGE_READ, message).sendToTarget();
+                        message = "";
+                    }
+
+                    //mHandler.obtainMessage(MainActivity.MESSAGE_READ, bytes, -1, buffer)
+                    //        .sendToTarget();
                 } catch (IOException e) {
                     connectionLost();
                     break;
